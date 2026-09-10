@@ -1,37 +1,123 @@
 # PantryAI
 
-PantryAI is a deployable Flask application for a Databricks AI Data Engineering capstone.
+PantryAI is a deployable Flask product prototype for pantry management, meal planning, grocery coordination, and agent-style action workflows.
 
-The current version is intentionally self-contained so you can deploy the UI immediately.
-It uses in-memory Python lists as its data store. This lets you validate the complete product
-flow before connecting Lakebase, Spark pipelines, third-party APIs, embeddings, and a real AI agent.
+The current version focuses on validating the **application and interaction layer** before adding the production data and AI stack. It uses an in-memory store and deterministic recommendation logic, so it should be viewed as an **AI-ready workflow prototype**, not a production LLM application.
 
-## What already works
+**Tech:** Python · Flask · JavaScript · Databricks Apps · REST-style APIs
 
-- Responsive PantryAI dashboard
-- Pantry item add/remove
-- Expiration / "use soon" indicators
-- Meal plan view
-- Add recommended meal
-- Grocery list add/remove
-- Mark grocery items purchased
-- Recipe recommendation logic based on pantry match
-- Add missing recipe ingredients to grocery list
-- Functional mock agent
-- Agent reads pantry state
-- Agent recommends meals
-- Agent proposes actions
-- Agent can execute writes against the demo data
-- Health endpoint at `/health`
+---
 
-## Project structure
+## What is implemented
+
+- Responsive pantry dashboard
+- Pantry item add/remove workflows
+- Expiration and “use soon” prioritization
+- Grocery list add/remove/purchased actions
+- Meal-plan creation and removal
+- Recipe recommendations based on pantry coverage
+- Missing-ingredient detection
+- One-click addition of missing ingredients to the grocery list
+- Agent-style propose/execute interaction pattern
+- Flask JSON APIs for pantry, grocery, meal-plan, recommendation, and agent flows
+- Health endpoint for deployment checks
+- Databricks App configuration
+
+---
+
+## Application flow
 
 ```text
-pantry_ai_app/
+Pantry State
+    |
+    +--> Expiration Priority
+    |
+    +--> Recipe Matching
+              |
+              +--> Recommended Meal
+              |
+              +--> Missing Ingredients
+                        |
+                        +--> Grocery List
+              |
+              +--> Meal Plan
+
+User Message
+    |
+    v
+Agent-style Intent Router
+    |
+    +--> Recommend
+    +--> Propose Action
+    +--> Execute Approved Write
+```
+
+The current “agent” is intentionally deterministic. It recognizes a small set of intents, reads application state, recommends an action, and can execute approved writes such as adding grocery items or scheduling a meal.
+
+---
+
+## Core APIs
+
+### Pantry
+
+```http
+GET    /api/pantry
+POST   /api/pantry
+DELETE /api/pantry/<item_id>
+```
+
+### Grocery list
+
+```http
+GET    /api/grocery
+POST   /api/grocery
+PATCH  /api/grocery/<item_id>
+DELETE /api/grocery/<item_id>
+```
+
+### Meal plan
+
+```http
+GET    /api/meal-plan
+POST   /api/meal-plan
+DELETE /api/meal-plan/<item_id>
+```
+
+### Recommendations and actions
+
+```http
+GET  /api/recommendation
+POST /api/recommendation/add-missing
+POST /api/recommendation/plan
+POST /api/agent
+```
+
+### Health
+
+```http
+GET /health
+```
+
+---
+
+## Recommendation logic
+
+The application scores recipes based on two signals:
+
+1. **Pantry coverage** — how many required ingredients are already available
+2. **Expiration priority** — a bonus for recipes that use ingredients approaching expiration
+
+The highest-scoring recipe is returned with its pantry-match percentage and missing ingredients.
+
+---
+
+## Repository structure
+
+```text
+.
 ├── app.py
 ├── app.yaml
 ├── requirements.txt
-├── README.md
 ├── templates/
 │   └── index.html
 └── static/
@@ -39,60 +125,40 @@ pantry_ai_app/
     └── style.css
 ```
 
-## Run locally
+---
 
-Create a virtual environment if desired, then:
+## Run locally
 
 ```bash
 pip install -r requirements.txt
 python app.py
 ```
 
-Open:
+The application runs on port `8000` by default.
 
-```text
-http://localhost:8000
-```
-
-## Run using Gunicorn
+For a production-style local process:
 
 ```bash
 gunicorn --bind 0.0.0.0:8000 app:app
 ```
 
-## Databricks App
+---
 
-Upload the full folder into your Databricks workspace / app source and deploy it as a Databricks App.
+## Databricks Apps deployment
 
-The supplied `app.yaml` launches:
+The included `app.yaml` launches PantryAI with Gunicorn and can be used to deploy the project as a Databricks App.
 
-```text
-gunicorn --bind 0.0.0.0:8000 app:app
-```
+---
 
-## Important demo limitation
+## Current limitation
 
-The current application stores data in memory. That means changes reset when the Python process restarts.
+Application state is stored in Python memory. Data resets when the process restarts.
 
-This is deliberate for the first deployable version.
+The next engineering phase would replace the in-memory store with persistent operational tables and then add the data/AI architecture below.
 
-The next implementation step should be replacing the in-memory data with Lakebase tables:
+---
 
-- pantry_items
-- grocery_items
-- meal_plan
-- recipes
-- recipe_ingredients
-
-After that, add:
-
-1. USDA FoodData Central API integration
-2. Spark Bronze/Silver pipeline
-3. Recipe dataset ingestion
-4. Embeddings + Vector Search
-5. Real Databricks AI agent tools
-
-## Suggested capstone architecture
+## Planned production architecture
 
 ```text
 USDA / Recipe API
@@ -101,38 +167,33 @@ USDA / Recipe API
 Spark ingestion
         |
         v
-Bronze raw JSON
+Bronze raw data
         |
         v
-Spark transformations
+Curated food + recipe data
+        |
+        +--------> Embeddings / Vector Retrieval
         |
         v
-Silver food + recipe tables
-        |
-        +----------> Embeddings / Vector Search
+Lakebase operational state
         |
         v
-Lakebase operational tables
-        |
-        v
-PantryAI agent
-   |           |
-   | reads     | writes
-   v           v
-Pantry      Grocery / Meal Plan
+LLM / Agent Tool Layer
         |
         v
 Databricks App
 ```
 
-## Example agent prompts
+Planned extensions include:
 
-Try:
+- Lakebase persistence for pantry, grocery, meal-plan, and recipe state
+- External food/recipe API ingestion
+- Spark-based Bronze/Silver data processing
+- Recipe embeddings and semantic retrieval
+- Real LLM/agent integration with controlled read/write tools
 
-- `What can I make tonight?`
-- `What will expire first?`
-- `Plan dinner using whatever is going bad first`
-- `What am I missing for dinner?`
-- `Add the missing ingredients to my grocery list`
+---
 
-The current mock agent demonstrates the read + action pattern required by the capstone.
+## Why this project exists
+
+This prototype was built to validate the user workflow and action model before introducing the heavier data and AI infrastructure. It demonstrates how an application can separate **state, recommendation logic, proposed actions, and explicit execution**, which is the same interaction pattern needed when replacing deterministic logic with production agent tooling later.
